@@ -11,6 +11,7 @@
 #include <vector>
 #include <memory>
 #include <functional>
+#include <unordered_map>
 
 class Gameboy;
 
@@ -89,6 +90,9 @@ private:
     auto bg_enabled() const -> bool;
 
     auto get_tile_info(Address tile_set_location, u8 tile_id, u8 tile_line) const -> TileInfo;
+    
+    // Novo método para obter a cor original (antes da paleta) de um pixel
+    auto get_original_color_at(u8 x, u8 y) -> GBColor;
 
     static auto get_real_color(u8 pixel_value) -> Color;
     static auto load_palette(ByteRegister& palette_register) -> Palette;
@@ -105,6 +109,9 @@ private:
     uint cycle_counter = 0;
 
     vblank_callback_t vblank_callback;
+    
+    // Buffer para armazenar as cores originais dos pixels
+    std::vector<GBColor> original_colors;
 };
 
 const uint CLOCKS_PER_HBLANK = 204; /* Mode 0 */

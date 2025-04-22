@@ -4,6 +4,7 @@
 #include "input.h"
 #include "cpu/cpu.h"
 #include "video/video.h"
+#include "audio/audio.h"
 #include "serial.h"
 #include "timer.h"
 #include "options.h"
@@ -21,7 +22,8 @@ public:
 
     void run(
         const should_close_callback_t& _should_close_callback,
-        const vblank_callback_t& _vblank_callback
+        const vblank_callback_t& _vblank_callback,
+        const audio_callback_t& _audio_callback = nullptr
     );
 
     void button_pressed(GbButton button);
@@ -43,6 +45,9 @@ private:
 
     Video video;
     friend class Video;
+
+    Audio audio;
+    friend class Audio;
 
     MMU mmu;
     friend class MMU;

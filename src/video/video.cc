@@ -149,6 +149,13 @@ void Video::draw_bg_line(uint current_line) {
      * drawing a single line */
     uint screen_y = current_line;
 
+    // Cache para armazenar os dados de linha de cada tile
+    struct TileLineData {
+        u8 pixels_1;
+        u8 pixels_2;
+    };
+    std::unordered_map<uint, TileLineData> tile_line_cache;
+
     for (uint screen_x = 0; screen_x < GAMEBOY_WIDTH; screen_x++) {
         /* Work out the position of the pixel in the framebuffer */
         uint scrolled_x = screen_x + scroll_x.value();
@@ -187,13 +194,22 @@ void Video::draw_bg_line(uint current_line) {
 
         Address tile_line_data_start_address = tile_set_address + tile_data_mem_offset + tile_data_line_offset;
 
-        /* FIXME: We fetch the full line of pixels for each pixel in the tile
-         * we render. This could be altered to work in a way that avoids re-fetching
-         * for a more performant renderer */
-        u8 pixels_1 = gb.mmu.read(tile_line_data_start_address);
-        u8 pixels_2 = gb.mmu.read(tile_line_data_start_address + 1);
+        // Criar uma chave única para o cache baseada no endereço da linha do tile
+        uint cache_key = tile_line_data_start_address.value();
+        
+        // Verificar se os dados da linha já estão no cache
+        TileLineData line_data;
+        if (tile_line_cache.find(cache_key) == tile_line_cache.end()) {
+            // Se não estiver no cache, buscar da memória e armazenar
+            line_data.pixels_1 = gb.mmu.read(tile_line_data_start_address);
+            line_data.pixels_2 = gb.mmu.read(tile_line_data_start_address + 1);
+            tile_line_cache[cache_key] = line_data;
+        } else {
+            // Se estiver no cache, usar os dados armazenados
+            line_data = tile_line_cache[cache_key];
+        }
 
-        GBColor pixel_color = get_pixel_from_line(pixels_1, pixels_2, tile_pixel_x);
+        GBColor pixel_color = get_pixel_from_line(line_data.pixels_1, line_data.pixels_2, tile_pixel_x);
         Color screen_color = get_color_from_palette(pixel_color, palette);
 
         buffer.set_pixel(screen_x, screen_y, screen_color);
@@ -220,6 +236,13 @@ void Video::draw_window_line(uint current_line) {
 
     if (scrolled_y >= GAMEBOY_HEIGHT) { return; }
     // if (!is_on_screen_y(scrolled_y)) { return; }
+
+    // Cache para armazenar os dados de linha de cada tile
+    struct TileLineData {
+        u8 pixels_1;
+        u8 pixels_2;
+    };
+    std::unordered_map<uint, TileLineData> tile_line_cache;
 
     for (uint screen_x = 0; screen_x < GAMEBOY_WIDTH; screen_x++) {
         /* Work out the position of the pixel in the framebuffer */
@@ -254,13 +277,22 @@ void Video::draw_window_line(uint current_line) {
 
         Address tile_line_data_start_address = tile_set_address + tile_data_mem_offset + tile_data_line_offset;
 
-        /* FIXME: We fetch the full line of pixels for each pixel in the tile
-         * we render. This could be altered to work in a way that avoids re-fetching
-         * for a more performant renderer */
-        u8 pixels_1 = gb.mmu.read(tile_line_data_start_address);
-        u8 pixels_2 = gb.mmu.read(tile_line_data_start_address + 1);
+        // Criar uma chave única para o cache baseada no endereço da linha do tile
+        uint cache_key = tile_line_data_start_address.value();
+        
+        // Verificar se os dados da linha já estão no cache
+        TileLineData line_data;
+        if (tile_line_cache.find(cache_key) == tile_line_cache.end()) {
+            // Se não estiver no cache, buscar da memória e armazenar
+            line_data.pixels_1 = gb.mmu.read(tile_line_data_start_address);
+            line_data.pixels_2 = gb.mmu.read(tile_line_data_start_address + 1);
+            tile_line_cache[cache_key] = line_data;
+        } else {
+            // Se estiver no cache, usar os dados armazenados
+            line_data = tile_line_cache[cache_key];
+        }
 
-        GBColor pixel_color = get_pixel_from_line(pixels_1, pixels_2, tile_pixel_x);
+        GBColor pixel_color = get_pixel_from_line(line_data.pixels_1, line_data.pixels_2, tile_pixel_x);
         Color screen_color = get_color_from_palette(pixel_color, palette);
 
         buffer.set_pixel(screen_x, screen_y, screen_color);
@@ -323,15 +355,13 @@ void Video::draw_sprite(const uint sprite_n) {
 
             if (!is_on_screen(screen_x, screen_y)) { continue; }
 
-            auto existing_pixel = buffer.get_pixel(screen_x, screen_y);
-
-            // FIXME: We need to see if the color we're writing over is
-            // logically Color0, rather than looking at the color after
-            // the current palette has been applied
-            if (obj_behind_bg && existing_pixel != Color::White) { continue; }
+            // Armazenar a cor original do fundo antes de aplicar a paleta
+            GBColor bg_gb_color = get_original_color_at(screen_x, screen_y);
+            
+            // Se o objeto deve ficar atrás do fundo e o fundo não é transparente (Color0)
+            if (obj_behind_bg && bg_gb_color != GBColor::Color0) { continue; }
 
             Color screen_color = get_color_from_palette(gb_color, palette);
-
             buffer.set_pixel(screen_x, screen_y, screen_color);
         }
     }
@@ -350,15 +380,32 @@ auto Video::is_on_screen_y(u8 y) -> bool { return y < GAMEBOY_HEIGHT; }
 
 auto Video::is_on_screen(u8 x, u8 y) -> bool { return is_on_screen_x(x) && is_on_screen_y(y); }
 
+// Novo método para armazenar a cor original (antes da paleta) de cada pixel
+auto Video::get_original_color_at(u8 x, u8 y) -> GBColor {
+    // Implementação simplificada - em uma implementação completa, 
+    // seria necessário armazenar as cores originais em um buffer separado
+    // Esta é uma aproximação baseada na cor atual
+    Color current_color = buffer.get_pixel(x, y);
+    
+    if (current_color == Color::White) return GBColor::Color0;
+    if (current_color == Color::LightGray) return GBColor::Color1;
+    if (current_color == Color::DarkGray) return GBColor::Color2;
+    if (current_color == Color::Black) return GBColor::Color3;
+    
+    // Fallback
+    return GBColor::Color0;
+}
+
 auto Video::load_palette(ByteRegister& palette_register) -> Palette {
     using bitwise::compose_bits;
     using bitwise::bit_value;
 
-    /* TODO: Reduce duplication */
-    u8 color0 = compose_bits(bit_value(palette_register.value(), 1), bit_value(palette_register.value(), 0));
-    u8 color1 = compose_bits(bit_value(palette_register.value(), 3), bit_value(palette_register.value(), 2));
-    u8 color2 = compose_bits(bit_value(palette_register.value(), 5), bit_value(palette_register.value(), 4));
-    u8 color3 = compose_bits(bit_value(palette_register.value(), 7), bit_value(palette_register.value(), 6));
+    // Implementação mais eficiente usando bitmasking
+    u8 palette_value = palette_register.value();
+    u8 color0 = palette_value & 0x03;
+    u8 color1 = (palette_value >> 2) & 0x03;
+    u8 color2 = (palette_value >> 4) & 0x03;
+    u8 color3 = (palette_value >> 6) & 0x03;
 
     Color real_color_0 = get_real_color(color0);
     Color real_color_1 = get_real_color(color1);

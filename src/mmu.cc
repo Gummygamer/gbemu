@@ -75,6 +75,10 @@ auto MMU::read(const Address& address) const -> u8 {
 }
 
 auto MMU::read_io(const Address& address) const -> u8 {
+    // Route APU register reads to audio
+    if (address.value() >= 0xFF10 && address.value() <= 0xFF3F) {
+        return gb.audio.read_register(address.value());
+    }
     switch (address.value()) {
         case 0xFF00:
             return gb.input.get_input();
@@ -412,6 +416,11 @@ void MMU::write(const Address& address, const u8 byte) {
 }
 
 void MMU::write_io(const Address& address, const u8 byte) {
+    // Route APU register writes to audio
+    if (address.value() >= 0xFF10 && address.value() <= 0xFF3F) {
+        gb.audio.write_register(address.value(), byte);
+        return;
+    }
     switch (address.value()) {
         case 0xFF00:
             gb.input.write(byte);
